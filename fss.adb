@@ -69,55 +69,57 @@ package body fss is
 
       -- ... (otras variables si son necesarias)
         
-   begin
-      loop
-         Start_Activity ("Speed_Task");        
-                   
-         -- 1. Lee la potencia del piloto 
-         Read_Power (Current_Pw);  
-         Display_Pilot_Power (Current_Pw);
-         
-         -- 2. Lee el estado del Joystick para comprobar si hay cabeceo
-         Read_Joystick (Current_J);
-                      
-         -- 3. Calcula la velocidad base según el potenciómetro (factor 1.2)
-         Calculated_S := Speed_Samples_type (float (Current_Pw) * 1.2); 
-         
-         -- 4. Aplica el requisito: Incremento por maniobra de cabeceo positivo
-         -- Asumimos que un valor positivo en el eje X del joystick significa incremento de cabeceo (ascenso)
-         -- El requisito general (2.a) dice: cabeceo positivo (ascenso) aquel por encima de 0º.
-         -- Y el (2.b) dice: incrementar cuando el joystick esté inclinado hacia atrás (valores positivos).
-         -- OJO: Según la especificación, no basta con leer la inclinación actual, sino que hay que 
-         -- detectar que se "inicia" la maniobra. Para simplificar en este ejemplo, sumamos 150 si el 
-         -- joystick está simplemente inclinado hacia arriba (X > 0). En un sistema real, podrías 
-         -- necesitar mantener el estado anterior del joystick para detectar el "inicio" del movimiento.
-         
-         if (Current_J(x) > 0) then
-            Calculated_S := Calculated_S + 150;
-         end if;
-         
-         -- 5. Aplica el límite máximo (1000 km/h) y avisa
-         if (Calculated_S >= 1000) then
-            Calculated_S := 1000;
-            Light_2 (On); -- Especificación 4.c: "avisará al piloto mediante la Luz 2"
-         else 
-            Light_2 (Off);
-         end if;
-         
-         -- 6. Establece la velocidad final
-         Set_Speed (Calculated_S);
-         
-         -- 7. Comprueba y muestra la velocidad real
-         Current_S := Read_Speed;
-         Display_Speed (Current_S);
-                                 
-         Finish_Activity ("Speed_Task");   
-         
-         -- El requisito 4.h dice: "La regulación de la velocidad del avión se realizará cada 300 milisegundos."
-         delay until (Clock + Milliseconds (300));
-         
-      end loop;
-   end Speed;
+    begin
+        loop
+            Start_Activity ("Speed_Task");        
+                    
+            -- 1. Lee la potencia del piloto 
+            Read_Power (Current_Pw);  
+            Display_Pilot_Power (Current_Pw);
+            
+            -- 2. Lee el estado del Joystick para comprobar si hay cabeceo
+            Read_Joystick (Current_J);
+                        
+            -- 3. Calcula la velocidad base según el potenciómetro (factor 1.2)
+            Calculated_S := Speed_Samples_type (float (Current_Pw) * 1.2); 
+            
+            -- 4. Aplica el requisito: Incremento por maniobra de cabeceo positivo
+            -- Asumimos que un valor positivo en el eje X del joystick significa incremento de cabeceo (ascenso)
+            -- El requisito general (2.a) dice: cabeceo positivo (ascenso) aquel por encima de 0º.
+            -- Y el (2.b) dice: incrementar cuando el joystick esté inclinado hacia atrás (valores positivos).
+            -- OJO: Según la especificación, no basta con leer la inclinación actual, sino que hay que 
+            -- detectar que se "inicia" la maniobra. Para simplificar en este ejemplo, sumamos 150 si el 
+            -- joystick está simplemente inclinado hacia arriba (X > 0). En un sistema real, podrías 
+            -- necesitar mantener el estado anterior del joystick para detectar el "inicio" del movimiento.
+            
+            if (Current_J(x) > 0) then
+                Calculated_S := Calculated_S + 150;
+            end if;
+            
+            -- 5. Aplica el límite máximo (1000 km/h) y avisa
+            if (Calculated_S >= 1000) then
+                Calculated_S := 1000;
+                Light_2 (On); -- Especificación 4.c: "avisará al piloto mediante la Luz 2"
+            elsif (Calculated_S < 300) then
+                Calculated_S := 300;
+                Light_2 (On); -- Especificación 4.d
+            else 
+                Light_2 (Off);
+            end if;
+            
+            -- 6. Establece la velocidad final
+            Set_Speed (Calculated_S);
+            
+            -- 7. Comprueba y muestra la velocidad real
+            Current_S := Read_Speed;
+            Display_Speed (Current_S);
+                                    
+            Finish_Activity ("Speed_Task");   
+            
+            -- El requisito 4.h dice: "La regulación de la velocidad del avión se realizará cada 300 milisegundos."
+            delay until (Clock + Milliseconds (300));
+        end loop;
+    end Speed;
 
     -- Aqui se escriben los cuerpos de las tareas 
    task body Prueba_Distancia is
