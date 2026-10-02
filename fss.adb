@@ -1,3 +1,9 @@
+-- Entrega Arranque del Proyecto FSS
+-- Realizado por:
+--   Jorge Moya
+--   Christian Cabañero
+--   Javier Lopez Peinado
+--   Paulo Blas Heredia
 
 with Kernel.Serial_Output; use Kernel.Serial_Output;
 with Ada.Real_Time; use Ada.Real_Time;
@@ -36,47 +42,110 @@ package body fss is
     -----------------------------------------------------------------------
 
     -- Aqui se declaran las tareas que forman el STR
-
+    task Speed is
+      pragma Priority(20);
+   end Speed;
+   task Prueba_Distancia is
+      pragma Priority(20);
+   end Prueba_Distancia;
+   task Prueba_Joystick is
+      pragma Priority(19);
+   end Prueba_Joystick;
+   task Prueba_Piloto is
+      pragma Priority(18);
+   end Prueba_Piloto;
 
     -----------------------------------------------------------------------
     ------------- body of tasks 
     -----------------------------------------------------------------------
 
+    task body Speed is
+      Current_Pw: Power_Samples_Type := 0;
+      Current_S: Speed_Samples_Type := 500;
+      Calculated_S: Speed_Samples_type := 0;
+      
+      -- Nueva variable para leer el Joystick
+      Current_J: Joystick_Samples_Type := (0,0); 
+
+      -- ... (otras variables si son necesarias)
+        
+   begin
+      loop
+         Start_Activity ("Speed_Task");        
+                   
+         -- 1. Lee la potencia del piloto 
+         Read_Power (Current_Pw);  
+         Display_Pilot_Power (Current_Pw);
+         
+         -- 2. Lee el estado del Joystick para comprobar si hay cabeceo
+         Read_Joystick (Current_J);
+                      
+         -- 3. Calcula la velocidad base según el potenciómetro (factor 1.2)
+         Calculated_S := Speed_Samples_type (float (Current_Pw) * 1.2); 
+         
+         -- 4. Aplica el requisito: Incremento por maniobra de cabeceo positivo
+         -- Asumimos que un valor positivo en el eje X del joystick significa incremento de cabeceo (ascenso)
+         -- El requisito general (2.a) dice: cabeceo positivo (ascenso) aquel por encima de 0º.
+         -- Y el (2.b) dice: incrementar cuando el joystick esté inclinado hacia atrás (valores positivos).
+         -- OJO: Según la especificación, no basta con leer la inclinación actual, sino que hay que 
+         -- detectar que se "inicia" la maniobra. Para simplificar en este ejemplo, sumamos 150 si el 
+         -- joystick está simplemente inclinado hacia arriba (X > 0). En un sistema real, podrías 
+         -- necesitar mantener el estado anterior del joystick para detectar el "inicio" del movimiento.
+         
+         if (Current_J(x) > 0) then
+            Calculated_S := Calculated_S + 150;
+         end if;
+         
+         -- 5. Aplica el límite máximo (1000 km/h) y avisa
+         if (Calculated_S >= 1000) then
+            Calculated_S := 1000;
+            Light_2 (On); -- Especificación 4.c: "avisará al piloto mediante la Luz 2"
+         else 
+            Light_2 (Off);
+         end if;
+         
+         -- 6. Establece la velocidad final
+         Set_Speed (Calculated_S);
+         
+         -- 7. Comprueba y muestra la velocidad real
+         Current_S := Read_Speed;
+         Display_Speed (Current_S);
+                                 
+         Finish_Activity ("Speed_Task");   
+         
+         -- El requisito 4.h dice: "La regulación de la velocidad del avión se realizará cada 300 milisegundos."
+         delay until (Clock + Milliseconds (300));
+         
+      end loop;
+   end Speed;
+
     -- Aqui se escriben los cuerpos de las tareas 
-
-
-    ----------------------------------------------------------------------
-    ------------- procedimientos para probar los dispositivos 
-    ------------- SE DEBERÁN QUITAR PARA EL PROYECTO
-    ----------------------------------------------------------------------
-    procedure Prueba_Velocidad_Distancia; 
-    procedure Prueba_Altitud_Joystick; 
-    procedure Prueba_Sensores_Piloto;
-    
-    Procedure Prueba_Velocidad_Distancia is
-
-        Current_Pw: Power_Samples_Type := 0;
+   task body Prueba_Distancia is
+      Current_Pw: Power_Samples_Type := 0;
         Current_S: Speed_Samples_Type := 500; 
         Calculated_S: Speed_Samples_type := 0; 
              
         Current_D: Distance_Samples_Type := 0;
         Current_L: Light_Samples_Type := 0;
         
-    begin
+   begin
 
-         for I in 1..200 loop     -- Se limita a 200 iteraciones
-         Start_Activity ("Prueba_Velocidad");        
+      loop
+      Start_Activity ("Prueba_Distancia");        
                    
-            -- Prueba potencia del piloto 
-            Read_Power (Current_Pw);  -- lee la potencia de motor indicada por el piloto
+      -- Prueba potencia del piloto 
+      Read_Power (Current_Pw);  -- lee la potencia de motor indicada por el piloto
             Display_Pilot_Power (Current_Pw);
                       
             -- transfiere la potencia/velocidad a la aeronave
             Calculated_S := Speed_Samples_type (float (Current_Pw) * 1.2); -- aplicar fórmula
-            Set_Speed (Calculated_S);
-            if (Calculated_S > 1000) then Light_1 (On);
-                                     else Light_1 (Off);
+            if (Calculated_S > 1000) then
+               Calculated_S := 1000;
+               Light_1 (On);
+            else 
+               Light_1 (Off);
             end if;
+            Set_Speed (Calculated_S);
             
             -- Comprueba la velocidad real de la aeronave
             Current_S := Read_Speed;        -- lee la velocidad actual de la aeronave
@@ -84,18 +153,25 @@ package body fss is
 
             -- Prueba distancia con obstaculos
             Read_Distance (Current_D);
+            if (Current_D < 1000) then
+               Alarm (4);
+               Set_Aircraft_Roll(Roll_Samples_Type(40));
+            elsif (Current_D < 2000) then
+               Alarm (4);
+            elsif (Current_D < 4000) then
+               Alarm (2);
+            else
+               Alarm (0);
+            end if;
             Display_Distance (Current_D);
                                  
-         Finish_Activity ("Prueba_Velocidad");   
-         delay until (Clock + To_time_Span(0.1));
+         Finish_Activity ("Prueba_Distancia");   
+         delay until (Clock + Milliseconds (300));
          end loop;
+   end Prueba_Distancia;
 
-
-    end Prueba_Velocidad_Distancia;
-
-    Procedure Prueba_Altitud_Joystick is
-        
-        Current_J: Joystick_Samples_Type := (0,0);
+   task body Prueba_Joystick is
+      Current_J: Joystick_Samples_Type := (0,0);
         Target_Pitch: Pitch_Samples_Type := 0;
         Target_Roll: Roll_Samples_Type := 0; 
         Aircraft_Pitch: Pitch_Samples_Type; 
@@ -104,15 +180,25 @@ package body fss is
         Current_A: Altitude_Samples_Type := 8000;
         
     begin
-         for I in 1..300 loop     
-            Start_Activity ("Prueba_Altitud");
+         loop     
+            Start_Activity ("Prueba_Joystick");
             
             -- Lee Joystick del piloto
             Read_Joystick (Current_J);
             
             -- establece Pitch y Roll en la aeronave
             Target_Pitch := Pitch_Samples_Type (Current_J(x));
+            if (Target_Pitch > 30) then
+               Target_Pitch := Pitch_Samples_Type(30);
+            elsif (Target_Pitch < -30) then
+               Target_Pitch := Pitch_Samples_Type(-30);
+            end if;
             Target_Roll := Roll_Samples_Type (Current_J(y));
+            if (Target_Roll > 45) then
+               Target_Roll := Roll_Samples_Type(45);
+            elsif (Target_Roll < -45) then
+               Target_Roll := Roll_Samples_Type(-45);
+            end if;
                                       
             Set_Aircraft_Pitch (Target_Pitch);  -- transfiere el movimiento pitch a la aeronave
             Set_Aircraft_Roll (Target_Roll);    -- transfiere el movimiento roll  a la aeronave 
@@ -127,25 +213,29 @@ package body fss is
             -- Comprueba altitud
             Current_A := Read_Altitude;         -- lee y muestra por display la altitud de la aeronave  
             Display_Altitude (Current_A);
-            
-            if (Current_A > 9000) then Alarm (3); 
-                                       Display_Message ("To high");
+            if (Current_A > 9000) then
+               Alarm (3); 
+               Display_Message ("To high");
+               if (Current_A > 10000) then
+                  Light_2 (On);
+               else
+                  Light_2 (Off);
+               end if;
+            else
+               Light_2 (Off);
             end if; 
                
-            Finish_Activity ("Prueba_Altitud");                      
-         delay until (Clock + To_time_Span(0.1));
+            Finish_Activity ("Prueba_Joystick");                      
+         delay until (Clock + Milliseconds (300));
          end loop;
+   end Prueba_Joystick;
 
-         Finish_Activity ("Prueba_Altitud");
-    end Prueba_Altitud_Joystick;
-
-
-    Procedure Prueba_Sensores_Piloto is
-        Current_Pp: PilotPresence_Samples_Type := 1;
+   task body Prueba_Piloto is
+      Current_Pp: PilotPresence_Samples_Type := 1;
         Current_Pb: PilotButton_Samples_Type := 0;
     begin
 
-         for I in 1..120 loop
+         loop
             Start_Activity ("Prueba_Piloto");                
             -- Prueba presencia piloto
             Current_Pp := Read_PilotPresence;
@@ -157,18 +247,16 @@ package body fss is
             Display_Pilot_Button (Current_Pb); 
             
             Finish_Activity ("Prueba_Piloto");  
-         delay until (Clock + To_time_Span(0.1));
+         delay until (Clock + Milliseconds (300));
          end loop;
-
-         Finish_Activity ("Prueba_Piloto");
-    end Prueba_Sensores_Piloto;
-
+   end Prueba_Piloto;
+    ----------------------------------------------------------------------
+    ------------- procedimientos para probar los dispositivos 
+    ------------- SE DEBERÁN QUITAR PARA EL PROYECTO
+    ----------------------------------------------------------------------
 
 begin
    Start_Activity ("Programa Principal");
-   Prueba_Velocidad_Distancia;
-   -- Prueba_Altitud_Joystick;
-   -- Prueba_Sensores_Piloto;
    Finish_Activity ("Programa Principal");
 end fss;
 
