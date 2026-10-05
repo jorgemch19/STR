@@ -65,7 +65,9 @@ package body fss is
       Calculated_S: Speed_Samples_type := 0;
       
       Current_J: Joystick_Samples_Type := (0,0); 
-        
+      
+      Siguiente_Instante : Time := Clock;
+      Intervalo : Time_Span := Milliseconds (300);
     begin
         loop
             Start_Activity ("Speed_Task");        
@@ -102,7 +104,8 @@ package body fss is
                                     
             Finish_Activity ("Speed_Task");
             
-            delay until (Clock + Milliseconds (300));
+            Siguiente_Instante := Siguiente_Instante + Intervalo;
+            delay until Siguiente_Instante;
         end loop;
     end Speed;
 
