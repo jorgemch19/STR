@@ -1,7 +1,7 @@
 -- Entrega Arranque del Proyecto FSS
 -- Realizado por:
 --   Jorge Moya
---   Christian Caba�ero
+--   Christian Cabanero
 --   Javier Lopez Peinado
 --   Paulo Blas Heredia
 
@@ -35,6 +35,7 @@ package body fss is
 
     -- Aqui se declaran los objetos protegidos para los datos compartidos  
    protected Pitch_and_Roll is
+      pragma Priority (20);
       function Get_PR return Joystick_Samples_Type;
       procedure Set_PR (pitch_roll: in Joystick_Samples_Type);
 
@@ -160,7 +161,6 @@ package body fss is
          end if;
          
          if (Target_Roll > 35 or Target_Roll < -35) then
-            Display_Roll (Roll_Samples_Type(Target_Roll));
             Display_Message ("ALERTA ALABEO: SOBREPASANDO ANGULO DE SEGURIDAD (35 grados)");
          end if;
          
