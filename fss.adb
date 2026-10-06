@@ -1,7 +1,7 @@
 -- Entrega Arranque del Proyecto FSS
 -- Realizado por:
 --   Jorge Moya
---   Christian Cabañero
+--   Christian Caba�ero
 --   Javier Lopez Peinado
 --   Paulo Blas Heredia
 
@@ -111,11 +111,11 @@ package body fss is
             
             Current_S := Read_Speed;
             Display_Speed (Current_S);
+
+            Finish_Activity ("Speed_Task");
             
             Siguiente_Instante := Siguiente_Instante + Intervalo;
             delay until Siguiente_Instante;
-
-            Finish_Activity ("Speed_Task");
         end loop;
     end Speed;
 
@@ -123,8 +123,9 @@ package body fss is
       Current_J: Joystick_Samples_Type := (0, 0);
       Current_A: Altitude_Samples_Type := 8000;
 
-      Target_Pitch: Pitch_Samples_Type := 0;
-      Target_Roll: Roll_Samples_Type := 0;
+      Target_Pitch: Joystick_Samples_Values := 0;
+      Target_Roll: Joystick_Samples_Values := 0;
+      Target_J: Joystick_Samples_Type := (0, 0);
 
       Siguiente_Instante : Time := Clock;
       Intervalo : Time_Span := Milliseconds (200);
@@ -133,14 +134,59 @@ package body fss is
          Start_Activity ("Position_Altitude_Task");
          
          Read_Joystick (Current_J);
+         Current_A := Read_Altitude;
 
-         Target_Pitch := Pitch_Samples_Type(Current_J(x));
-         Target_Roll := Roll_Samples_Type(Current_J(y));
-               
+         Target_Pitch := Current_J(x);
+         Target_Roll := Current_J(y);
+
+         if ((Current_A <= 2000 and Target_Pitch < 0) or (Current_A >= 10000 and Target_Pitch > 0)) then
+            Target_Pitch := 0;
+         else
+            if (abs(Target_Pitch) <= 3) then
+               Target_Pitch := 0;
+            elsif (Target_Pitch > 30) then
+               Target_Pitch := 30;
+            elsif (Target_Pitch < -30) then
+               Target_Pitch := -30;
+            end if;
+         end if;
+
+         if (abs(Target_Roll) <= 3) then
+            Target_Roll := 0;
+         elsif (Target_Roll > 45) then
+            Target_Roll := 45;
+         elsif (Target_Roll < -45) then
+            Target_Roll := -45;
+         end if;
+         
+         if (Target_Roll > 35 or Target_Roll < -35) then
+            Display_Roll (Roll_Samples_Type(Target_Roll));
+            Display_Message ("ALERTA ALABEO: SOBREPASANDO ANGULO DE SEGURIDAD (35 grados)");
+         end if;
+         
+         if (Current_A < 2500 or Current_A > 9500) then
+            Light_1 (On);
+         else
+            Light_1 (Off);
+         end if;
+
+         Target_J := (x => Target_Pitch, y => Target_Roll);
+         Pitch_and_Roll.Set_PR(Target_J);
+
+         Set_Aircraft_Pitch (Pitch_Samples_Type(Target_Pitch));
+         Set_Aircraft_Roll (Roll_Samples_Type(Target_Roll));
+
+         Display_Joystick (Current_J);
+         Display_Pitch (Read_Pitch);
+         Display_Roll (Read_Roll);
+         Display_Altitude (Current_A);
+
+         Finish_Activity ("Position_Altitude_Task");
+
          Siguiente_Instante := Siguiente_Instante + Intervalo;
          delay until Siguiente_Instante;
 
-         Finish_Activity ("Position_Altitude_Task");
+         
       end loop;
    end Position_Altitude;
 
