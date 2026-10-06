@@ -77,7 +77,6 @@ package body fss is
       
       Current_J: Joystick_Samples_Type := (0,0); 
       
-      
       Siguiente_Instante : Time := Clock;
       Intervalo : Time_Span := Milliseconds (300);
     begin
@@ -88,7 +87,6 @@ package body fss is
             Display_Pilot_Power (Current_Pw);
             
             Current_J := Pitch_and_Roll.Get_PR;
-                        
             Calculated_S := Speed_Samples_type (float (Current_Pw) * 1.2); 
             
             if (Current_J(x) > 3 and (abs(Current_J(y)) > 3)) then
@@ -113,13 +111,38 @@ package body fss is
             
             Current_S := Read_Speed;
             Display_Speed (Current_S);
-                                    
-            Finish_Activity ("Speed_Task");
             
             Siguiente_Instante := Siguiente_Instante + Intervalo;
             delay until Siguiente_Instante;
+
+            Finish_Activity ("Speed_Task");
         end loop;
     end Speed;
+
+   task body Position_Altitude is
+      Current_J: Joystick_Samples_Type := (0, 0);
+      Current_A: Altitude_Samples_Type := 8000;
+
+      Target_Pitch: Pitch_Samples_Type := 0;
+      Target_Roll: Roll_Samples_Type := 0;
+
+      Siguiente_Instante : Time := Clock;
+      Intervalo : Time_Span := Milliseconds (200);
+   begin
+      loop
+         Start_Activity ("Position_Altitude_Task");
+         
+         Read_Joystick (Current_J);
+
+         Target_Pitch := Pitch_Samples_Type(Current_J(x));
+         Target_Roll := Roll_Samples_Type(Current_J(y));
+               
+         Siguiente_Instante := Siguiente_Instante + Intervalo;
+         delay until Siguiente_Instante;
+
+         Finish_Activity ("Position_Altitude_Task");
+      end loop;
+   end Position_Altitude;
 
 begin
    Start_Activity ("Programa Principal");
