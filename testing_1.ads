@@ -25,7 +25,7 @@ with devicesfss_v1; use devicesfss_v1;
 package testing_1 is
 
     ---------------------------------------------------------------------
-    ------ Access time for devices (sin cambios)
+    ------ Access time for devices
     ---------------------------------------------------------------------
     WCET_Distance: constant Ada.Real_Time.Time_Span := Ada.Real_Time.Milliseconds(5);
     WCET_Light: constant Ada.Real_Time.Time_Span := Ada.Real_Time.Milliseconds(5);

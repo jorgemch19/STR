@@ -1,10 +1,3 @@
--- Entrega Arranque del Proyecto FSS
--- Realizado por:
---   Jorge Moya
---   Christian Cabanero
---   Javier Lopez Peinado
---   Paulo Blas Heredia
-
 with Kernel.Serial_Output; use Kernel.Serial_Output;
 with Ada.Real_Time; use Ada.Real_Time;
 with System; use System;
@@ -73,12 +66,12 @@ package body fss is
 
     task body Speed is
       Current_Pw: Power_Samples_Type := 0;
-      Current_S: Speed_Samples_Type := 500;
+      Current_S: Speed_Samples_Type := 0;
       Calculated_S: Speed_Samples_type := 0;
       
       Current_J: Joystick_Samples_Type := (0,0); 
       
-      Siguiente_Instante : Time := Clock;
+      Siguiente_Instante : Time := Big_Bang;
       Intervalo : Time_Span := Milliseconds (300);
     begin
         loop
@@ -128,7 +121,7 @@ package body fss is
       Target_Roll: Joystick_Samples_Values := 0;
       Target_J: Joystick_Samples_Type := (0, 0);
 
-      Siguiente_Instante : Time := Clock;
+      Siguiente_Instante : Time := Big_Bang;
       Intervalo : Time_Span := Milliseconds (200);
    begin
       loop
