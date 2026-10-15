@@ -55,8 +55,8 @@ package testing_2_1 is
 
    Joystick_Subida: constant tipo_Secuencia_Joystick :=
       (
-      0 .. 119 => (x => 60, y => 0), -- 0-12 s: sube (30)
-      120 .. 139 => (x => -60, y => 0), -- 12-14 s: baja (-30)
+      0 .. 119 => (x => 55, y => 0), -- 0-12 s: sube (30)
+      120 .. 139 => (x => -32, y => 0), -- 12-14 s: baja (-30)
       140 .. 159 => (x => 20, y => 0), -- 14-16 s: sube (20)
       160 .. 179 => (x => 0, y => 0), -- 16-18 s: centrado
       180 .. 199 => (x => 3, y => 0)); -- 18-20 s: margen
@@ -64,9 +64,9 @@ package testing_2_1 is
    Joystick_Bajada: constant tipo_Secuencia_Joystick :=
       (
       0 .. 119 => (x => -60, y => 0), -- 0-12 s: baja (-30)
-      120 .. 139 => (x => 60, y => 0), -- 12-14 s: sube (30)
+      120 .. 139 => (x => -40, y => 0), -- 12-14 s: baja (-30)
       140 .. 159 => (x => -20, y => 0), -- 14-16 s: baja (-20)
-      160 .. 179 => (x => 0, y => 0), -- 16-18 s: centrado
+      160 .. 179 => (x => 15, y => 0), -- 16-18 s: sube (15)
       180 .. 199 => (x => -3, y => 0)); -- 18-20 s: margen
 
    -- Elegir la prueba: Joystick_Subida o Joystick_Bajada
