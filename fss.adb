@@ -1,14 +1,15 @@
 -- Alumnos:
---
-
--- Grupo: 
+   -- Jorge Moya
+   -- Christian Cabañero
+   -- Javier López
+   -- Paulo Blas Heredia
 
 -- Tareas implementadas:
--- Speed : Control de velocidad de los motores (periodo 300 ms, prioridad 15)
--- Position_Altitude : Control de cabeceo, alabeo y altitud (periodo 200 ms, prioridad 20)
+   -- Speed : Control de velocidad de los motores (periodo 300 ms, prioridad 15)
+   -- Position_Altitude : Control de cabeceo, alabeo y altitud (periodo 200 ms, prioridad 20)
 
 -- Objetos protegidos implementados:
--- Pitch_and_Roll : Comparte la posicion del joystick (ya limitada) entre Position_Altitude (escribe con Set_PR) y Speed (lee con Get_PR). Techo de prioridad 20
+   -- Pitch_and_Roll : Comparte la posicion del joystick (ya limitada) entre Position_Altitude (escribe con Set_PR) y Speed (lee con Get_PR). Techo de prioridad 20
 
 with Kernel.Serial_Output; use Kernel.Serial_Output;
 with Ada.Real_Time; use Ada.Real_Time;
