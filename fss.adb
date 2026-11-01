@@ -41,7 +41,7 @@ package body fss is
 
     -- Aqui se declaran los objetos protegidos para los datos compartidos  
    protected Pitch_and_Roll is
-      pragma Priority (20);
+      pragma Priority (18);
       function Get_PR return Joystick_Samples_Type;
       procedure Set_PR (pitch_roll: in Joystick_Samples_Type);
 
@@ -61,19 +61,52 @@ package body fss is
       end Set_PR;
    end Pitch_and_Roll;
 
-   protected Maneuver is
-      pragma Priority(20);
-      function Is_Maneuver_Underway return Boolean;
-   private
-      Underway : Boolean := False;
-   end Maneuver;
 
-   protected body Maneuver is
+   protected Speed_Altitude is
+      pragma Priority (20);
+      function Get_Speed return Speed_Samples_Type;
+      function Get_Altitude return Altitude_Samples_Type;
+      function Is_Maneuver_Underway return Boolean;
+      procedure Set_Speed (S: in Speed_Samples_Type);
+      procedure Set_Altitude (A: in Altitude_Samples_Type);
+      procedure Set_Maneuver (State : in Boolean);
+   private
+      Speed : Speed_Samples_Type := 0;
+      Altitude : Altitude_Samples_Type := 8000;
+      Underway : Boolean := False;
+   end Speed_Altitude;
+
+   protected body Speed_Altitude is
+      function Get_Speed return Speed_Samples_Type is
+      begin
+         return Speed;
+      end Get_Speed;
+
+      function Get_Altitude return Altitude_Samples_Type is
+      begin
+         return Altitude;
+      end Get_Altitude;
+
       function Is_Maneuver_Underway return Boolean is
       begin
          return Underway;
       end Is_Maneuver_Underway;
-   end Pitch_and_Roll;
+
+      procedure Set_Speed (S: in Speed_Samples_Type) is
+      begin
+         Speed := S;
+      end Set_Speed;
+
+      procedure Set_Altitude (A: in Altitude_Samples_Type) is
+      begin
+         Altitude := A;
+      end Set_Altitude;
+
+      procedure Set_Maneuver (state : in Boolean) is
+      begin
+         Underway := state;
+      end Set_Maneuver;
+   end Speed_Altitude;
     -----------------------------------------------------------------------
     ------------- declaration of tasks 
     -----------------------------------------------------------------------
@@ -131,8 +164,8 @@ package body fss is
             end if;
             
             Set_Speed (Calculated_S);
-            
             Current_S := Read_Speed;
+            Speed_Altitude.Set_Speed (Current_S);
             Display_Speed (Current_S);
 
             Finish_Activity ("Speed_Task");
@@ -150,6 +183,8 @@ package body fss is
       Target_Roll: Joystick_Samples_Values := 0;
       Target_J: Joystick_Samples_Type := (0, 0);
 
+      Maneuver : Boolean := False;
+
       Siguiente_Instante : Time := Big_Bang;
       Intervalo : Time_Span := Milliseconds (200);
    begin
@@ -157,7 +192,9 @@ package body fss is
          Start_Activity ("Position_Altitude_Task");
          
          Read_Joystick (Current_J);
-         Current_A := Altitude.Read_Altitude;
+         Current_A := Read_Altitude;
+         Speed_Altitude.Set_Altitude (Current_A);
+         Maneuver := Speed_Altitude.Is_Maneuver_Underway;
 
          Target_Pitch := Current_J(x);
          Target_Roll := Current_J(y);
@@ -174,16 +211,20 @@ package body fss is
             end if;
          end if;
 
-         if (abs(Target_Roll) <= 3) then
-            Target_Roll := 0;
-         elsif (Target_Roll > 45) then
+         if Maneuver then
             Target_Roll := 45;
-         elsif (Target_Roll < -45) then
-            Target_Roll := -45;
-         end if;
-         
-         if (Target_Roll > 35 or Target_Roll < -35) then
-            Display_Message ("ALERTA ALABEO: SOBREPASANDO ANGULO DE SEGURIDAD (35 grados)");
+         else
+            if (abs(Target_Roll) <= 3) then
+               Target_Roll := 0;
+            elsif (Target_Roll > 45) then
+               Target_Roll := 45;
+            elsif (Target_Roll < -45) then
+               Target_Roll := -45;
+            end if;
+
+            if (Target_Roll > 35 or Target_Roll < -35) then
+               Display_Message ("ALERTA ALABEO: SOBREPASANDO ANGULO DE SEGURIDAD (35 grados)");
+            end if;
          end if;
          
          if (Current_A < 2500 or Current_A > 9500) then
@@ -196,7 +237,9 @@ package body fss is
          Pitch_and_Roll.Set_PR(Target_J);
 
          Set_Aircraft_Pitch (Pitch_Samples_Type(Target_Pitch));
-         Set_Aircraft_Roll (Roll_Samples_Type(Target_Roll));
+         if (not Maneuver) then
+            Set_Aircraft_Roll (Roll_Samples_Type(Target_Roll));
+         end if;
 
          Display_Joystick (Current_J);
          Display_Pitch (Read_Pitch);
@@ -212,7 +255,6 @@ package body fss is
 
    task body Collision is
       Current_D : Distance_Samples_Type := 0;
-      Current_A : Altitude_Samples_Type := 8000;
       Current_S : Speed_Samples_Type := 0;
       Current_Pilot_Presence : PilotPresence_Samples_Type := 0;
       Current_Light : Light_Samples_Type := 0;
@@ -221,39 +263,56 @@ package body fss is
       Time_Alert : Integer := 0;
       Time_Maneuver : Integer := 0;
 
+      Current_Maneuver : Boolean := False;
+      Maneuver_Started : Time;
+
       Siguiente_Instante : Time := Big_Bang;
       Intervalo : Time_Span := Milliseconds (250);
    begin
       loop
          Start_Activity ("Collision_Task");
 
-         Read_Distance (Current_D);
-
-         if (Current_D <= 5000) then
-            Current_S := Speed.Get_Speed; -- Objeto protegido
-
-            Time_Collision := (Float(Current_S) * 3600) / (Float(Current_D) * 1000); -- Poner variables bien
-
-            Current_A := Altitude.Get_Altitude; -- Objeto protegido
-            Current_Pilot_Presence := Read_PilotPresence;
-            Read_Light_Intensity (Current_Light);
-
-            if (Current_Light < 500 or Current_Pilot_Presence /= 1) then
-               Time_Alert := 15;
-               Time_Maneuver := 10;
-            else
-               Time_Alert := 10;
-               Time_Maneuver := 5;
+         if (Current_Maneuver) then
+            if (Clock - Maneuver_Started >= Milliseconds (3000)) then
+               Set_Aircraft_Roll (0);
+               Speed_Altitude.Set_Maneuver (False);
+               Current_Maneuver := False;
             end if;
+         else
+            Read_Distance (Current_D);
 
-            if (Time_Collision < Float(Time_Alert)) then
-               Alarm(4);
-               if (Time_Collision < Float(Time_Maneuver)) then
-                  -- Inicia maniobra desvío automático
+            if (Current_D <= 5000) then
+               Current_S := Speed_Altitude.Get_Speed;
+
+               if (Current_S > 0) then
+                  Time_Collision := (Float(Current_D) * 3600.0) / (Float(Current_S) * 1000.0);
+               else
+                  Time_Collision := Float'Last;
+               end if;
+
+               Current_Pilot_Presence := Read_PilotPresence;
+               Read_Light_Intensity (Current_Light);
+
+               if (Current_Light < 500 or Current_Pilot_Presence /= 1) then
+                  Time_Alert := 15;
+                  Time_Maneuver := 10;
+               else
+                  Time_Alert := 10;
+                  Time_Maneuver := 5;
+               end if;
+
+               if (Time_Collision < Float(Time_Alert)) then
+                  Alarm(4);
+                  if (Time_Collision < Float(Time_Maneuver)) then
+                     Set_Aircraft_Roll (45);
+                     Speed_Altitude.Set_Maneuver (True);
+                     Current_Maneuver := True;
+                     Maneuver_Started := Clock;
+                  end if;
                end if;
             end if;
-            
 
+            Display_Distance (Current_D);
          end if;
 
          Finish_Activity ("Collision_Task");
