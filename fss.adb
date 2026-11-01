@@ -61,6 +61,19 @@ package body fss is
       end Set_PR;
    end Pitch_and_Roll;
 
+   protected Maneuver is
+      pragma Priority(20);
+      function Is_Maneuver_Underway return Boolean;
+   private
+      Underway : Boolean := False;
+   end Maneuver;
+
+   protected body Maneuver is
+      function Is_Maneuver_Underway return Boolean is
+      begin
+         return Underway;
+      end Is_Maneuver_Underway;
+   end Pitch_and_Roll;
     -----------------------------------------------------------------------
     ------------- declaration of tasks 
     -----------------------------------------------------------------------
@@ -70,8 +83,11 @@ package body fss is
       pragma Priority(15);
    end Speed;
    task Position_Altitude is
-      pragma Priority(20);
+      pragma Priority(18);
    end Position_Altitude;
+   task Collision is
+      pragma Priority(20);
+   end Collision;
 
     -----------------------------------------------------------------------
     ------------- body of tasks 
@@ -141,7 +157,7 @@ package body fss is
          Start_Activity ("Position_Altitude_Task");
          
          Read_Joystick (Current_J);
-         Current_A := Read_Altitude;
+         Current_A := Altitude.Read_Altitude;
 
          Target_Pitch := Current_J(x);
          Target_Roll := Current_J(y);
@@ -191,10 +207,61 @@ package body fss is
 
          Siguiente_Instante := Siguiente_Instante + Intervalo;
          delay until Siguiente_Instante;
-
-         
       end loop;
    end Position_Altitude;
+
+   task body Collision is
+      Current_D : Distance_Samples_Type := 0;
+      Current_A : Altitude_Samples_Type := 8000;
+      Current_S : Speed_Samples_Type := 0;
+      Current_Pilot_Presence : PilotPresence_Samples_Type := 0;
+      Current_Light : Light_Samples_Type := 0;
+
+      Time_Collision : Float := 0.0;
+      Time_Alert : Integer := 0;
+      Time_Maneuver : Integer := 0;
+
+      Siguiente_Instante : Time := Big_Bang;
+      Intervalo : Time_Span := Milliseconds (250);
+   begin
+      loop
+         Start_Activity ("Collision_Task");
+
+         Read_Distance (Current_D);
+
+         if (Current_D <= 5000) then
+            Current_S := Speed.Get_Speed; -- Objeto protegido
+
+            Time_Collision := (Float(Current_S) * 3600) / (Float(Current_D) * 1000); -- Poner variables bien
+
+            Current_A := Altitude.Get_Altitude; -- Objeto protegido
+            Current_Pilot_Presence := Read_PilotPresence;
+            Read_Light_Intensity (Current_Light);
+
+            if (Current_Light < 500 or Current_Pilot_Presence /= 1) then
+               Time_Alert := 15;
+               Time_Maneuver := 10;
+            else
+               Time_Alert := 10;
+               Time_Maneuver := 5;
+            end if;
+
+            if (Time_Collision < Float(Time_Alert)) then
+               Alarm(4);
+               if (Time_Collision < Float(Time_Maneuver)) then
+                  -- Inicia maniobra desvío automático
+               end if;
+            end if;
+            
+
+         end if;
+
+         Finish_Activity ("Collision_Task");
+
+         Siguiente_Instante := Siguiente_Instante + Intervalo;
+         delay until Siguiente_Instante;
+      end loop;
+   end Collision;
 
 begin
    Start_Activity ("Programa Principal");
