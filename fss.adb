@@ -304,6 +304,9 @@ package body fss is
                Set_Aircraft_Roll (0);
                Speed_Altitude.Set_Maneuver (False);
                Current_Maneuver := False;
+            else
+               -- Se repite la orden por si Position_Altitude la ha pisado
+               Set_Aircraft_Roll (45);
             end if;
          else
             Read_Distance (Current_D);
