@@ -1,4 +1,4 @@
--- FSS - Prototipo 3
+-- FSS - Prototipo 4
 
 -- Alumnos:
    -- Jorge Moya
@@ -10,10 +10,12 @@
    -- Speed : Control de velocidad de los motores (periodo 300 ms, prioridad 15)
    -- Position_Altitude : Control de cabeceo, alabeo y altitud (periodo 200 ms, prioridad 18)
    -- Collision : Control de colisiones (periodo 250 ms, prioridad 20)
+   -- Display : Visualización del estado del avión, única tarea que escribe en pantalla (periodo 1000 ms, prioridad 10)
 
 -- Objetos protegidos implementados:
    -- Pitch_and_Roll : Comparte la posicion del joystick (ya limitada) entre Position_Altitude (escribe con Set_PR) y Speed (lee con Get_PR). Techo de prioridad 18
    -- Speed_Altitude : Comparte la velocidad, altitud y estado de maniobra entre Speed, Position_Altitude y Collision. Techo de prioridad 20
+   -- Status_Record : Recoge el estado que escriben Speed, Position_Altitude y Collision para que lo muestre Display. Techo de prioridad 20
 
 with Kernel.Serial_Output; use Kernel.Serial_Output;
 with Ada.Real_Time; use Ada.Real_Time;
@@ -37,7 +39,24 @@ package body fss is
       null;
    end loop;
    end Background;
-   ----------------------------------------------------------------------
+
+   -----------------------------------------------------------------------
+   ------------- declaration of types
+   -----------------------------------------------------------------------
+   -- Datos que muestra la tarea Display. Cada tarea de control rellena su parte
+   type Status_Type is record
+      Joystick : Joystick_Samples_Type := (0, 0);
+      Pitch : Pitch_Samples_Type := 0;
+      Roll : Roll_Samples_Type := 0;
+      Altitude : Altitude_Samples_Type := 8000;
+      Roll_Alert : Boolean := False;
+      Power : Power_Samples_Type := 0;
+      Speed : Speed_Samples_Type := 0;
+      Distance : Distance_Samples_Type := 0;
+      Light : Light_Samples_Type := 0;
+      Pilot_Presence : PilotPresence_Samples_Type := 0;
+      Maneuver : Boolean := False;
+   end record;
 
    -----------------------------------------------------------------------
    ------------- declaration of protected objects 
@@ -115,6 +134,51 @@ package body fss is
          Underway := state;
       end Set_Maneuver;
    end Speed_Altitude;
+
+   -- Comunica el estado del avión a la tarea Display, la única que escribe en pantalla
+   -- Techo 20 porque lo usa Collision
+   protected Status_Record is
+      pragma Priority (20);
+      procedure Set_Position_Status (J: in Joystick_Samples_Type; P: in Pitch_Samples_Type; R: in Roll_Samples_Type; A: in Altitude_Samples_Type; Alert: in Boolean);
+      procedure Set_Speed_Status (Pw: in Power_Samples_Type; S: in Speed_Samples_Type);
+      procedure Set_Collision_Status (D: in Distance_Samples_Type; L: in Light_Samples_Type; PP: in PilotPresence_Samples_Type; M: in Boolean);
+      procedure Get_Status (Current : out Status_Type);
+   private
+      Status : Status_Type;
+   end Status_Record;
+
+   protected body Status_Record is
+      procedure Set_Position_Status (J: in Joystick_Samples_Type; P: in Pitch_Samples_Type; R: in Roll_Samples_Type; A: in Altitude_Samples_Type; Alert: in Boolean) is
+      begin
+         Status.Joystick := J;
+         Status.Pitch := P;
+         Status.Roll := R;
+         Status.Altitude := A;
+         -- La alerta se mantiene hasta que Display la muestra, para no perderla
+         Status.Roll_Alert := Status.Roll_Alert or Alert;
+      end Set_Position_Status;
+
+      procedure Set_Speed_Status (Pw: in Power_Samples_Type; S : in Speed_Samples_Type) is
+      begin
+         Status.Power := Pw;
+         Status.Speed := S;
+      end Set_Speed_Status;
+
+      procedure Set_Collision_Status (D: in Distance_Samples_Type; L: in Light_Samples_Type; PP: in PilotPresence_Samples_Type; M: in Boolean) is
+      begin
+         Status.Distance := D;
+         Status.Light := L;
+         Status.Pilot_Presence := PP;
+         Status.Maneuver := M;
+      end Set_Collision_Status;
+
+      procedure Get_Status (Current : out Status_Type) is
+      begin
+         Current := Status;
+         Status.Roll_Alert := False;
+      end Get_Status;
+   end Status_Record;
+
    -----------------------------------------------------------------------
    ------------- declaration of tasks 
    -----------------------------------------------------------------------
@@ -124,12 +188,19 @@ package body fss is
    task Speed is
       pragma Priority(15);
    end Speed;
+
    task Position_Altitude is
       pragma Priority(18);
    end Position_Altitude;
+
    task Collision is
       pragma Priority(20);
    end Collision;
+
+   task Display is
+      pragma Priority(10);
+   end Display;
+
 
    -----------------------------------------------------------------------
    ------------- body of tasks 
@@ -151,7 +222,6 @@ package body fss is
          Start_Activity ("Speed_Task");        
                   
          Read_Power (Current_Pw);  
-         Display_Pilot_Power (Current_Pw);
          
          Current_J := Pitch_and_Roll.Get_PR;
          Calculated_S := Speed_Samples_type (float (Current_Pw) * 1.2); 
@@ -181,7 +251,7 @@ package body fss is
           -- Se publica la velocidad real, no la ordenada
          Current_S := Read_Speed;
          Speed_Altitude.Set_Speed (Current_S);
-         Display_Speed (Current_S);
+         Status_Record.Set_Speed_Status (Current_Pw, Current_S);
 
          Finish_Activity ("Speed_Task");
          
@@ -200,6 +270,8 @@ package body fss is
       Target_J: Joystick_Samples_Type := (0, 0);
 
       Maneuver : Boolean := False;
+
+      Roll_Alert : Boolean := False; -- Variable local para avisar a Display de que se ha sobrepasado el ángulo de seguridad de alabeo
 
       Siguiente_Instante : Time := Big_Bang;
       Intervalo : Time_Span := Milliseconds (200);
@@ -232,6 +304,7 @@ package body fss is
          -- Se ignora el alabeo durante la maniobra de emergencia, y se limita a 45 grados en cualquier caso
          if Maneuver then
             Target_Roll := 45;
+            Roll_Alert := False;
          else
             -- Margen de +/- 3 grados y límites de +/- 45 grados para el alabeo
             if (abs(Target_Roll) <= 3) then
@@ -243,7 +316,9 @@ package body fss is
             end if;
 
             if (Target_Roll > 35 or Target_Roll < -35) then
-               Display_Message ("ALERTA ALABEO: SOBREPASANDO ANGULO DE SEGURIDAD (35 grados)");
+               Roll_Alert := True;
+            else
+               Roll_Alert := False;
             end if;
          end if;
          
@@ -263,10 +338,7 @@ package body fss is
             Set_Aircraft_Roll (Roll_Samples_Type(Target_Roll));
          end if;
 
-         Display_Joystick (Current_J);
-         Display_Pitch (Read_Pitch);
-         Display_Roll (Read_Roll);
-         Display_Altitude (Current_A);
+         Status_Record.Set_Position_Status (Current_J, Read_Pitch, Read_Roll, Current_A, Roll_Alert);
 
          Finish_Activity ("Position_Altitude_Task");
 
@@ -305,11 +377,14 @@ package body fss is
                Speed_Altitude.Set_Maneuver (False);
                Current_Maneuver := False;
             else
-               -- Se repite la orden por si Position_Altitude la ha pisado
+               -- Se repite la orden por si Position_Altitude la ha sobreescrito
                Set_Aircraft_Roll (45);
             end if;
          else
             Read_Distance (Current_D);
+
+            Current_Pilot_Presence := Read_PilotPresence;
+            Read_Light_Intensity (Current_Light);
 
             if (Current_D <= 5000) then
                Current_S := Speed_Altitude.Get_Speed;
@@ -321,9 +396,6 @@ package body fss is
                   -- Con el avión parado, no hay colisión
                   Time_Collision := Float'Last;
                end if;
-
-               Current_Pilot_Presence := Read_PilotPresence;
-               Read_Light_Intensity (Current_Light);
 
                -- Con poca visibilidad o sin piloto en el asiento, se da más tiempo de alerta y maniobra
                if (Current_Light < 500 or Current_Pilot_Presence /= 1) then
@@ -345,9 +417,9 @@ package body fss is
                   end if;
                end if;
             end if;
-
-            Display_Distance (Current_D);
          end if;
+
+         Status_Record.Set_Collision_Status (Current_D, Current_Light, Current_Pilot_Presence, Current_Maneuver);
 
          Finish_Activity ("Collision_Task");
 
@@ -355,6 +427,43 @@ package body fss is
          delay until Siguiente_Instante;
       end loop;
    end Collision;
+
+   -- Muestra cada segundo el estado que las tareas dejan en Status_Record
+   task body Display is
+      Current_Status : Status_Type;
+
+      Siguiente_Instante : Time := Big_Bang;
+      Intervalo : Time_Span := Milliseconds (1000);
+   begin
+      loop
+         Start_Activity ("Display_Task");
+
+         Status_Record.Get_Status (Current_Status);
+
+         Display_Joystick (Current_Status.Joystick);
+         Display_Pitch (Current_Status.Pitch);
+         Display_Roll (Current_Status.Roll);
+         Display_Altitude (Current_Status.Altitude);
+         Display_Pilot_Power (Current_Status.Power);
+         Display_Speed (Current_Status.Speed);
+         Display_Distance (Current_Status.Distance);
+         Display_Light_Intensity (Current_Status.Light);
+         Display_Pilot_Presence (Current_Status.Pilot_Presence);
+
+         if Current_Status.Roll_Alert then
+            Display_Message ("ALERTA ALABEO: SOBREPASANDO ANGULO DE SEGURIDAD (35 grados)");
+         end if;
+
+         if Current_Status.Maneuver then
+            Display_Message ("MANIOBRA DE DESVIO AUTOMATICO EN CURSO");
+         end if;
+
+         Finish_Activity ("Display_Task");
+
+         Siguiente_Instante := Siguiente_Instante + Intervalo;
+         delay until Siguiente_Instante;
+      end loop;
+   end Display;
 
 begin
    Start_Activity ("Programa Principal");
