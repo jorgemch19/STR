@@ -250,6 +250,9 @@ end Selected_Mode;
       pragma Priority(10);
    end Display;
 
+   task Mode is
+      pragma Priority(12);
+   end Mode;
 
    -----------------------------------------------------------------------
    ------------- body of tasks 
@@ -513,6 +516,16 @@ end Selected_Mode;
          delay until Siguiente_Instante;
       end loop;
    end Display;
+
+   task body Mode is
+   begin
+      loop
+         Interrupt_Handler.Wait_Button;
+         Start_Activity ("Mode_Task");
+         Selected_Mode.Change_Mode;
+         Finish_Activity ("Mode_Task");
+      end loop;
+   end Mode;
 
 begin
    Start_Activity ("Programa Principal");
