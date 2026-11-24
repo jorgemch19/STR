@@ -197,7 +197,7 @@ package body fss is
          Pressed := True;
       end Button_Pressed;
 
-      entry Wait_Button When Pressed is
+      entry Wait_Button when Pressed is
       begin
          Pressed := False;
       end Wait_Button;
@@ -518,12 +518,19 @@ end Selected_Mode;
    end Display;
 
    task body Mode is
+      Activation_Time : Time;
+      Minimum_Separation : Time_Span := Milliseconds (330);
    begin
       loop
          Interrupt_Handler.Wait_Button;
+         Activation_Time := Clock;
          Start_Activity ("Mode_Task");
+
          Selected_Mode.Change_Mode;
+
          Finish_Activity ("Mode_Task");
+
+         delay until Activation_Time + Minimum_Separation;
       end loop;
    end Mode;
 
