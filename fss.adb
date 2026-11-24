@@ -222,7 +222,7 @@ package body fss is
       end if;
    end Change_Mode;
 
-   function Read_MOde return Mode_Type is
+   function Read_Mode return Mode_Type is
    begin
       return Current_Mode;
    end Read_Mode;
