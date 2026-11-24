@@ -26,8 +26,8 @@ with devicesFSS_V1; use devicesFSS_V1;
 
 -- NO ACTIVAR ESTE PAQUETE MIENTRAS NO SE TENGA PROGRAMADA LA INTERRUPCION
 -- Packages needed to generate button interrupts       
--- with Ada.Interrupts.Names;
--- with Button_Interrupt; use Button_Interrupt;
+with Ada.Interrupts.Names;
+with Button_Interrupt; use Button_Interrupt;
 
 package body fss is
    ----------------------------------------------------------------------
@@ -57,6 +57,8 @@ package body fss is
       Pilot_Presence : PilotPresence_Samples_Type := 0;
       Maneuver : Boolean := False;
    end record;
+
+   type Mode_Type is (Automatico, Manual);
 
    -----------------------------------------------------------------------
    ------------- declaration of protected objects 
@@ -178,6 +180,53 @@ package body fss is
          Status.Roll_Alert := False;
       end Get_Status;
    end Status_Record;
+
+   -- Manejador de la interrupcion del boton, contiene la RTI que alertará a la tarea Mode que el botón ha sido presionado
+   protected Interrupt_Handler is
+      pragma Interrupt_Priority (Priority_Of_External_Interrupts_2); -- Se define la prioridad de la interrupcion
+      procedure Button_Pressed; -- RTI
+      pragma Attach_Handler (Button_Pressed, Ada.Interrupts.Names.External_Interrupt_2); -- Se define el procedimiento a ejecutar cuando la interrupcion se active
+      entry Wait_Button;
+   private
+      Pressed : Boolean := False;
+   end Interrupt_Handler;
+
+   protected body Interrupt_Handler is
+      procedure Button_Pressed is
+      begin
+         Pressed := True;
+      end Button_Pressed;
+
+      entry Wait_Button When Pressed is
+      begin
+         Pressed := False;
+      end Wait_Button;
+   end Interrupt_Handler;
+
+   -- Objeto que guarda el modo (Automatico o Manual), lo escribe la tarea Modo y lo lee las 3 tareas (Position_Altitude, Speed, Collision)
+   protected Selected_Mode is
+      pragma Priority(20);
+      procedure Change_Mode;
+      function Read_Mode return Mode_Type;
+   private
+      Current_Mode: Mode_Type := Automatico;
+   end Selected_Mode;
+
+   protected body Selected_Mode is
+   procedure Change_Mode is
+   begin
+      if Current_Mode = Automatico then
+         Current_Mode := Manual;
+      else
+         Current_Mode := Automatico;
+      end if;
+   end Change_Mode;
+
+   function Read_MOde return Mode_Type is
+   begin
+      return Current_Mode;
+   end Read_Mode;
+end Selected_Mode;
 
    -----------------------------------------------------------------------
    ------------- declaration of tasks 
